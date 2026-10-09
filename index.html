@@ -18,6 +18,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- html2pdf.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Flatpickr (Calendário Moderno) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" id="flatpickr-theme">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
 
     <!-- Manifest PWA Injetado -->
     <link rel="manifest" id="pwa-manifest">
@@ -191,14 +196,14 @@
             flex-wrap: wrap;
         }
 
-        /* --- FILTRO DE MÊS / ANO --- */
+        /* --- FILTRO DE MÊS / ANO COM CALENDÁRIO --- */
         .global-filter-bar {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
-            padding: 10px 16px;
+            padding: 12px 16px;
             border-radius: 8px;
             display: flex;
-            gap: 12px;
+            gap: 16px;
             align-items: center;
             margin-bottom: 16px;
             flex-wrap: wrap;
@@ -319,6 +324,7 @@
             outline: none;
             background: var(--bg-color);
             color: var(--text-main);
+            width: 100%;
         }
         .form-control:focus { border-color: var(--primary); }
 
@@ -334,7 +340,7 @@
         .badge-warning { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
         .badge-info { background: rgba(14, 165, 233, 0.15); color: var(--info); }
 
-        /* Modal customizado sem usar alert/confirm */
+        /* Modal customizado */
         .custom-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
@@ -386,7 +392,6 @@
 </head>
 <body>
 
-    <!-- Sidebar / Topbar em Mobile -->
     <aside class="sidebar" id="main-sidebar">
         <div class="sidebar-brand">
             <div style="display:flex; align-items:center; gap:10px;">
@@ -448,31 +453,22 @@
 
         <div class="content-body" id="exportable-content">
 
-            <!-- BARRA DE FILTRO GLOBAL POR MÊS E ANO -->
+            <!-- BARRA DE FILTRO GLOBAL COM CALENDÁRIO MODERNO -->
             <div class="global-filter-bar">
                 <div class="filter-item">
                     <i class="fa-solid fa-calendar-days" style="color:var(--primary);"></i>
-                    <span>Filtrar Período:</span>
+                    <span>Filtrar por Período:</span>
                 </div>
-                <div class="form-group" style="margin:0; flex-direction:row; gap:8px;">
-                    <select id="filtro-mes" class="form-control" onchange="aplicarFiltros()" style="padding:6px 10px;">
-                        <option value="todos">Todos os Meses</option>
-                        <option value="01">Janeiro</option>
-                        <option value="02">Fevereiro</option>
-                        <option value="03">Março</option>
-                        <option value="04">Abril</option>
-                        <option value="05">Maio</option>
-                        <option value="06">Junho</option>
-                        <option value="07">Julho</option>
-                        <option value="08">Agosto</option>
-                        <option value="09">Setembro</option>
-                        <option value="10">Outubro</option>
-                        <option value="11">Novembro</option>
-                        <option value="12">Dezembro</option>
-                    </select>
-                    <select id="filtro-ano" class="form-control" onchange="aplicarFiltros()" style="padding:6px 10px;">
-                        <option value="todos">Todos os Anos</option>
-                    </select>
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; flex:1;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <label style="font-size:0.75rem; color:var(--text-muted);">Início:</label>
+                        <input type="text" id="filtro-data-inicio" class="form-control" style="width: 130px; padding:6px 10px;" placeholder="dd/mm/aaaa">
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <label style="font-size:0.75rem; color:var(--text-muted);">Fim:</label>
+                        <input type="text" id="filtro-data-fim" class="form-control" style="width: 130px; padding:6px 10px;" placeholder="dd/mm/aaaa">
+                    </div>
+                    <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem;" onclick="limparFiltrosData()">Limpar Filtro</button>
                 </div>
             </div>
 
@@ -587,8 +583,8 @@
                                 <input type="number" step="0.01" id="input-valor" class="form-control" placeholder="0.00" required>
                             </div>
                             <div class="form-group">
-                                <label>Data</label>
-                                <input type="date" id="input-data" class="form-control" required>
+                                <label>Data da Transação</label>
+                                <input type="text" id="input-data" class="form-control" placeholder="Selecione a data..." required>
                             </div>
                         </div>
                         <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 8px;">
@@ -672,7 +668,7 @@
         </div>
     </div>
 
-    <!-- MODAL CUSTOMIZADO (SUBSTITUTO DE CONFIRM/ALERT) -->
+    <!-- MODAL CUSTOMIZADO -->
     <div class="custom-modal" id="app-modal">
         <div class="modal-card">
             <h3 id="modal-title">Confirmação</h3>
@@ -686,6 +682,7 @@
 
     <script>
         let deferredPrompt;
+        let pickerInicio, pickerFim, pickerFormulario;
 
         // Criar manifest PWA dinamicamente
         const manifestData = {
@@ -755,39 +752,50 @@
         let chartEvolucaoObj = null, chartCategoriasObj = null;
 
         document.addEventListener("DOMContentLoaded", () => {
-            // Inicializar data atual no formulário
-            document.getElementById('input-data').value = new Date().toISOString().split('T')[0];
-            
-            // Inicializar anos disponíveis no filtro
-            popularAnosFiltro();
-            
-            // Carregar tema salvo
             carregarTemaSalvo();
-
+            inicializarCalendarios();
             popularSelectCategorias();
             initCharts();
             atualizarTudo();
         });
 
-        function popularAnosFiltro() {
-            const selectAno = document.getElementById('filtro-ano');
-            const anoAtual = new Date().getFullYear();
-            let anosSet = new Set([anoAtual.toString()]);
-            transacoes.forEach(t => {
-                if (t.data) anosSet.add(t.data.split('-')[0]);
+        // Configuração dos calendários Flatpickr
+        function inicializarCalendarios() {
+            const configComum = {
+                locale: 'pt',
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd/m/Y',
+                allowInput: true
+            };
+
+            pickerFormulario = flatpickr("#input-data", {
+                ...configComum,
+                defaultDate: 'today'
             });
-            
-            selectAno.innerHTML = '<option value="todos">Todos os Anos</option>';
-            Array.from(anosSet).sort().reverse().forEach(ano => {
-                const opt = document.createElement('option');
-                opt.value = ano;
-                opt.innerText = ano;
-                if (ano === anoAtual.toString()) opt.selected = true;
-                selectAno.appendChild(opt);
+
+            // Definir padrão para o mês atual no filtro de datas
+            const hoje = new Date();
+            const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split('T')[0];
+            const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().split('T')[0];
+
+            pickerInicio = flatpickr("#filtro-data-inicio", {
+                ...configComum,
+                defaultDate: primeiroDia,
+                onChange: () => atualizarTudo()
             });
-            
-            // Selecionar mês atual por padrão
-            document.getElementById('filtro-mes').value = String(new Date().getMonth() + 1).padStart(2, '0');
+
+            pickerFim = flatpickr("#filtro-data-fim", {
+                ...configComum,
+                defaultDate: ultimoDia,
+                onChange: () => atualizarTudo()
+            });
+        }
+
+        function limparFiltrosData() {
+            pickerInicio.clear();
+            pickerFim.clear();
+            atualizarTudo();
         }
 
         function popularSelectCategorias() {
@@ -826,30 +834,36 @@
             html.setAttribute('data-theme', newTheme);
             localStorage.setItem('sys_fin_theme', newTheme);
             document.getElementById('theme-icon').className = newTheme === 'dark' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+            
+            // Alterar tema do flatpickr
+            const flatpickrTheme = document.getElementById('flatpickr-theme');
+            if (newTheme === 'dark') {
+                flatpickrTheme.setAttribute('href', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css');
+            } else {
+                flatpickrTheme.setAttribute('href', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/light.css');
+            }
         }
 
         function carregarTemaSalvo() {
             const saved = localStorage.getItem('sys_fin_theme') || 'dark';
             document.documentElement.setAttribute('data-theme', saved);
             document.getElementById('theme-icon').className = saved === 'dark' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+            if (saved === 'light') {
+                document.getElementById('flatpickr-theme').setAttribute('href', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/light.css');
+            }
         }
 
-        // --- FILTRAGEM DE TRANSAÇÕES ---
+        // --- FILTRAGEM POR PERÍODO DE CALENDÁRIO ---
         function getTransacoesFiltradas() {
-            const mes = document.getElementById('filtro-mes').value;
-            const ano = document.getElementById('filtro-ano').value;
+            const dataInicio = document.getElementById('filtro-data-inicio').value;
+            const dataFim = document.getElementById('filtro-data-fim').value;
 
             return transacoes.filter(t => {
                 if (!t.data) return false;
-                const [tAno, tMes] = t.data.split('-');
-                const matchMes = (mes === 'todos' || tMes === mes);
-                const matchAno = (ano === 'todos' || tAno === ano);
-                return matchMes && matchAno;
+                if (dataInicio && t.data < dataInicio) return false;
+                if (dataFim && t.data > dataFim) return false;
+                return true;
             });
-        }
-
-        function aplicarFiltros() {
-            atualizarTudo();
         }
 
         // --- CÁLCULOS E RENDERIZAÇÃO ---
@@ -921,7 +935,7 @@
             });
         }
 
-        // --- FORMULÁRIO E OPERAÇÕES CRUD ---
+        // --- FORMULÁRIO E CRUD ---
         function salvarOperacao(e) {
             e.preventDefault();
             const tipo = document.getElementById('input-tipo').value;
@@ -934,7 +948,6 @@
             const editId = document.getElementById('edit-id').value;
 
             if (editId) {
-                // Editar existente
                 transacoes = transacoes.map(t => {
                     if (t.id == editId) {
                         return { ...t, tipo, categoria, pagamento, status, descricao, valor, data };
@@ -943,7 +956,6 @@
                 });
                 cancelarEdicao();
             } else {
-                // Novo registro
                 transacoes.push({
                     id: Date.now(),
                     tipo, categoria, pagamento, status, descricao, valor, data
@@ -951,8 +963,7 @@
             }
 
             document.getElementById('form-operacao').reset();
-            document.getElementById('input-data').value = new Date().toISOString().split('T')[0];
-            popularAnosFiltro();
+            pickerFormulario.setDate(new Date());
             atualizarTudo();
             switchTab('dashboard', document.querySelectorAll('.menu-item')[0]);
         }
@@ -968,7 +979,7 @@
             document.getElementById('input-status').value = item.status || 'Pago';
             document.getElementById('input-descricao').value = item.descricao;
             document.getElementById('input-valor').value = item.valor;
-            document.getElementById('input-data').value = item.data;
+            pickerFormulario.setDate(item.data);
 
             document.getElementById('form-title').innerText = 'Editar Lançamento';
             document.getElementById('btn-cancel-edit').style.display = 'inline-flex';
@@ -978,7 +989,7 @@
         function cancelarEdicao() {
             document.getElementById('edit-id').value = '';
             document.getElementById('form-operacao').reset();
-            document.getElementById('input-data').value = new Date().toISOString().split('T')[0];
+            pickerFormulario.setDate(new Date());
             document.getElementById('form-title').innerText = 'Novo Lançamento';
             document.getElementById('btn-cancel-edit').style.display = 'none';
         }
@@ -1060,7 +1071,7 @@
             chartCategoriasObj.update();
         }
 
-        // --- GERENCIAMENTO DE CATEGORIAS CUSTOMIZADAS ---
+        // --- CATEGORIAS CUSTOMIZADAS ---
         function adicionarCategoriaCustomizada() {
             const input = document.getElementById('nova-categoria-input');
             const nome = input.value.trim();
@@ -1099,7 +1110,7 @@
             popularSelectCategorias();
         }
 
-        // --- WHATSAPP SHARE & PDF ---
+        // --- WHATSAPP E PDF ---
         function enviarWhatsApp() {
             const filtradas = getTransacoesFiltradas();
             let rec = 0, desp = 0;
@@ -1113,9 +1124,9 @@
             texto += `📥 *Entradas:* ${fmtMoney.format(rec)}\n`;
             texto += `📤 *Saídas:* ${fmtMoney.format(desp)}\n`;
             texto += `💰 *Saldo Líquido:* ${fmtMoney.format(saldo)}\n\n`;
-            texto += `📌 *Últimas Transações:*\n`;
+            texto += `📌 *Transações do Período:*\n`;
 
-            const ultimas = [...filtradas].sort((a,b) => new Date(b.data) - new Date(a.data)).slice(0, 5);
+            const ultimas = [...filtradas].sort((a,b) => new Date(b.data) - new Date(a.data));
             ultimas.forEach(t => {
                 const sinal = t.tipo === 'receita' ? '+' : '-';
                 texto += `• ${t.data.split('-').reverse().join('/')} | ${t.descricao} (${t.categoria}): *${sinal} ${fmtMoney.format(t.valor)}* [${t.status || 'Pago'}]\n`;
@@ -1144,19 +1155,17 @@
             abrirModal('Resetar Sistema', 'Tem certeza absoluta de que deseja apagar todos os lançamentos financeiros?', () => {
                 localStorage.removeItem('sys_fin_pro_data');
                 transacoes = [...dadosIniciais];
-                popularAnosFiltro();
                 atualizarTudo();
                 fecharModal();
             });
         }
 
-        // --- SISTEMA DE MODAL CUSTOMIZADO (SEM ALERT/CONFIRM) ---
+        // --- MODAL CUSTOMIZADO ---
         function abrirModal(titulo, mensagem, callbackConfirm) {
             document.getElementById('modal-title').innerText = titulo;
             document.getElementById('modal-message').innerText = mensagem;
             const btnConfirm = document.getElementById('modal-btn-confirm');
             
-            // Substituir botão para limpar listeners antigos
             const novoBtn = btnConfirm.cloneNode(true);
             btnConfirm.parentNode.replaceChild(novoBtn, btnConfirm);
             
